@@ -15,6 +15,7 @@ OBJS = \
 	picirq.o\
 	pipe.o\
 	proc.o\
+	rand.o\
 	spinlock.o\
 	string.o\
 	swtch.o\
@@ -210,6 +211,7 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 ifndef CPUS
 CPUS := 2
 endif
+QEMUEXTRA = -k "pt-br"
 QEMUOPTS = -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp $(CPUS) -m 512 $(QEMUEXTRA)
 
 qemu: fs.img xv6.img
