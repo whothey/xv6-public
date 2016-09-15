@@ -177,8 +177,11 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // utils.c
 unsigned int g_seed;
-inline void srand(unsigned int seed);
-inline int rand();
+
+void sfastrand(unsigned int seed);
+int fastrand();
+
+unsigned long rand_xor128();
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
