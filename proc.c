@@ -5,6 +5,7 @@
 #include "mmu.h"
 #include "x86.h"
 #include "proc.h"
+#include "rand.h"
 #include "spinlock.h"
 
 struct {
@@ -140,7 +141,7 @@ growproc(int n)
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
 int
-fork(void)
+fork(unsigned int ntickets)
 {
   int i, pid;
   struct proc *np;
@@ -182,6 +183,14 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+
+  // Tickets
+  if (ntickets > MAX_TICKETS)
+    np->tickets = MAX_TICKETS;
+  else if (ntickets < MIN_TICKETS)
+    np->tickets = MIN_TICKETS;
+  else
+    np->tickets = ntickets;
 
   release(&ptable.lock);
 

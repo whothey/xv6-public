@@ -1,3 +1,6 @@
+#define MIN_TICKETS 10
+#define MAX_TICKETS 100
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -63,6 +66,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  unsigned int tickets;        // Number of tickets for Lottery Scheduler
 };
 
 // Process memory is laid out contiguously, low addresses first:
