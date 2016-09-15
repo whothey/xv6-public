@@ -11,6 +11,9 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc* ready[NPROC];
+  unsigned int nready;
+  unsigned long total_tickets;
 } ptable;
 
 static struct proc *initproc;
@@ -25,6 +28,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  ptable.total_tickets = 0;
 }
 
 //PAGEBREAK: 32
@@ -192,6 +196,8 @@ fork(unsigned int ntickets)
   else
     np->tickets = ntickets;
 
+  ptable.total_tickets += np->tickets;
+
   release(&ptable.lock);
 
   return pid;
@@ -297,6 +303,9 @@ void
 scheduler(void)
 {
   struct proc *p;
+  unsigned int iproc;
+  unsigned long twinner;
+  unsigned long tacum = 0;
 
   for(;;){
     // Enable interrupts on this processor.
@@ -304,25 +313,31 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&cpu->scheduler, p->context);
-      switchkvm();
+    // Raffles any of the tickets
+    twinner = rand_xor128() % ptable.total_tickets;
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
+    for(iproc = 0; iproc < ptable.nready; p++) {
+      p = ptable.ready[iproc];
+      tacum += p->tickets;
+
+      if (twinner > tacum) break;
     }
-    release(&ptable.lock);
 
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    swtch(&cpu->scheduler, p->context);
+    switchkvm();
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    proc = 0;
+
+    release(&ptable.lock);
   }
 }
 
