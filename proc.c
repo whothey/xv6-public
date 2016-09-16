@@ -11,8 +11,6 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  struct proc* ready[NPROC];
-  unsigned int nready;
   unsigned long total_tickets;
 } ptable;
 
@@ -72,6 +70,7 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+  p->tickets = MIN_TICKETS;
 
   return p;
 }
@@ -117,6 +116,9 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  p->tickets = MAX_TICKETS;
+
+  ptable.total_tickets += p->tickets;
 
   release(&ptable.lock);
 }
@@ -189,13 +191,7 @@ fork(unsigned int ntickets)
   np->state = RUNNABLE;
 
   // Tickets
-  if (ntickets > MAX_TICKETS)
-    np->tickets = MAX_TICKETS;
-  else if (ntickets < MIN_TICKETS)
-    np->tickets = MIN_TICKETS;
-  else
-    np->tickets = ntickets;
-
+  SET_TICKETS(np, ntickets)
   ptable.total_tickets += np->tickets;
 
   release(&ptable.lock);
@@ -244,6 +240,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
+  ptable.total_tickets -= proc->tickets;
   sched();
   panic("zombie exit");
 }
@@ -303,39 +300,42 @@ void
 scheduler(void)
 {
   struct proc *p;
-  unsigned int iproc;
-  unsigned long twinner;
-  unsigned long tacum = 0;
+  unsigned long twinner = 0;
+  unsigned long tacum;
 
-  for(;;){
+  for(;;) {
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    // Raffles any of the tickets
-    twinner = rand_xor128() % ptable.total_tickets;
+    // Choose any of the tickets
+    if (ptable.total_tickets != 0)
+      twinner = rand_xor128() % ptable.total_tickets;
 
-    for(iproc = 0; iproc < ptable.nready; p++) {
-      p = ptable.ready[iproc];
-      tacum += p->tickets;
+    for(p = ptable.proc, tacum = 0; p < &ptable.proc[NPROC]; p++) {
+      if(p->state == RUNNABLE && ptable.total_tickets != 0) {
+        // Not yet
+        tacum += p->tickets;
 
-      if (twinner > tacum) break;
+        // 10   [5 10]
+        if (twinner > tacum) continue;
+      } else continue;
+
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+      swtch(&cpu->scheduler, p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      proc = 0;
     }
-
-    // Switch to chosen process.  It is the process's job
-    // to release ptable.lock and then reacquire it
-    // before jumping back to us.
-    proc = p;
-    switchuvm(p);
-    p->state = RUNNING;
-    swtch(&cpu->scheduler, p->context);
-    switchkvm();
-
-    // Process is done running for now.
-    // It should have changed its p->state before coming back.
-    proc = 0;
 
     release(&ptable.lock);
   }
@@ -422,6 +422,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
+  ptable.total_tickets -= proc->tickets;
   sched();
 
   // Tidy up.
@@ -443,8 +444,10 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      ptable.total_tickets += p->tickets;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -468,6 +471,7 @@ kill(int pid)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
       p->killed = 1;
+      ptable.total_tickets -= p->tickets;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;

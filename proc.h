@@ -1,3 +1,11 @@
+#define SET_TICKETS(proc, n)                    \
+  if ((n) > MAX_TICKETS)                        \
+    (proc)->tickets = MAX_TICKETS;              \
+  else if ((n) < MIN_TICKETS)                   \
+    (proc)->tickets = MIN_TICKETS;              \
+  else                                          \
+    (proc)->tickets = (n);                      \
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
