@@ -472,6 +472,7 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       ptable.total_tickets -= p->tickets;
+      p->tickets = 0;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
