@@ -273,6 +273,7 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->tickets = MIN_TICKETS;
         release(&ptable.lock);
         return pid;
       }
@@ -302,7 +303,7 @@ scheduler(void)
 {
   struct proc *p;
   unsigned long twinner = 0;
-  unsigned long tacum, total;
+  unsigned long tacum;
 
   for(;;) {
     // Enable interrupts on this processor.
@@ -311,15 +312,12 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    for(p = ptable.proc, total = 0; p < &ptable.proc[NPROC]; p++)
-      if (p->state == RUNNABLE) total += p->tickets;
-
     // Choose any of the tickets
-    if (total != 0)
-      twinner = rand_xor128() % total;
+    if (ptable.total_tickets != 0)
+      twinner = rand_xor128() % ptable.total_tickets;
 
     for(p = ptable.proc, tacum = 0; p < &ptable.proc[NPROC]; p++) {
-      if(p->state == RUNNABLE && total != 0) {
+      if(p->state == RUNNABLE && ptable.total_tickets != 0) {
         tacum += p->tickets;
 
         // Not yet
