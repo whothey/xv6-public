@@ -14,4 +14,4 @@
 
 // Lottery Scheduler
 #define MIN_TICKETS 10
-#define MAX_TICKETS 100
+#define MAX_TICKETS 500

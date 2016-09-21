@@ -10,7 +10,12 @@
 int
 sys_fork(void)
 {
-  return fork(MAX_TICKETS);
+  int t;
+
+  if (argint(0, &t) < 0)
+    return -1;
+
+  return fork(t);
 }
 
 int
@@ -40,6 +45,12 @@ int
 sys_getpid(void)
 {
   return proc->pid;
+}
+
+int
+sys_gettickets(void)
+{
+  return proc->tickets;
 }
 
 int

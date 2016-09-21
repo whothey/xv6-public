@@ -191,7 +191,8 @@ fork(unsigned int ntickets)
   np->state = RUNNABLE;
 
   // Tickets
-  SET_TICKETS(np, ntickets)
+  SET_TICKETS(np, ntickets);
+
   ptable.total_tickets += np->tickets;
 
   release(&ptable.lock);
@@ -301,7 +302,7 @@ scheduler(void)
 {
   struct proc *p;
   unsigned long twinner = 0;
-  unsigned long tacum;
+  unsigned long tacum, total;
 
   for(;;) {
     // Enable interrupts on this processor.
@@ -310,16 +311,18 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
+    for(p = ptable.proc, total = 0; p < &ptable.proc[NPROC]; p++)
+      if (p->state == RUNNABLE) total += p->tickets;
+
     // Choose any of the tickets
-    if (ptable.total_tickets != 0)
-      twinner = rand_xor128() % ptable.total_tickets;
+    if (total != 0)
+      twinner = rand_xor128() % total;
 
     for(p = ptable.proc, tacum = 0; p < &ptable.proc[NPROC]; p++) {
-      if(p->state == RUNNABLE && ptable.total_tickets != 0) {
-        // Not yet
+      if(p->state == RUNNABLE && total != 0) {
         tacum += p->tickets;
 
-        // 10   [5 10]
+        // Not yet
         if (twinner > tacum) continue;
       } else continue;
 
@@ -335,6 +338,7 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       proc = 0;
+      break;
     }
 
     release(&ptable.lock);
@@ -504,6 +508,8 @@ procdump(void)
   char *state;
   uint pc[10];
 
+  cprintf("Total Tickets: %d\n", ptable.total_tickets);
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -511,7 +517,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %s %s (%d)", p->pid, state, p->name, p->tickets);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
