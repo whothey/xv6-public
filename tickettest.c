@@ -19,7 +19,7 @@ int main()
   int pid = 0;
   unsigned int i, j, k;
 
-  printf(1, "I'm PID %d, the godfather with %d tickets!\n", getpid(), gettickets());
+  printf(1, "I'm PID %d, the Godfather with %d tickets!\n", getpid(), gettickets());
 
   pid = fork(100);
   CHECK_FORK();
@@ -60,6 +60,8 @@ int main()
     wait();
     wait();
     wait();
+
+    printf(1, "The Godfather(%d) says: all ok!\n", getpid());
   }
 
   exit();
