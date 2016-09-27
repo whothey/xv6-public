@@ -313,16 +313,17 @@ scheduler(void)
     acquire(&ptable.lock);
 
     // Choose any of the tickets
-    if (ptable.total_tickets != 0)
+    if (ptable.total_tickets > 0) {
       twinner = rand_xor128() % ptable.total_tickets;
 
-    for(p = ptable.proc, tacum = 0; p < &ptable.proc[NPROC]; p++) {
-      if(p->state == RUNNABLE && ptable.total_tickets != 0) {
-        tacum += p->tickets;
+      for(p = ptable.proc, tacum = 0; p < &ptable.proc[NPROC]; p++) {
+        if(p->state == RUNNABLE) {
+          tacum += p->tickets;
 
-        // Not yet
-        if (twinner > tacum) continue;
-      } else continue;
+          // We've found the winner
+          if (twinner <= tacum) break;
+        }
+      }
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -336,7 +337,6 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       proc = 0;
-      break;
     }
 
     release(&ptable.lock);
