@@ -15,6 +15,8 @@ struct {
 
 static struct proc *initproc;
 
+unsigned int ticket_bank = DEFAULT_TICKETS;
+
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
@@ -25,6 +27,22 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+}
+
+void
+deposit_tickets(unsigned int t)
+{
+  ticket_bank = t;
+}
+
+int
+withdraw_tickets(void)
+{
+  unsigned int t = ticket_bank;
+
+  ticket_bank = DEFAULT_TICKETS;
+
+  return t;
 }
 
 //PAGEBREAK: 32

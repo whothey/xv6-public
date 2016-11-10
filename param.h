@@ -15,4 +15,5 @@
 // Stride Scheduler
 #define MIN_TICKETS 10
 #define MAX_TICKETS 500
+#define DEFAULT_TICKETS 100
 #define STRIDE      10000

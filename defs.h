@@ -104,6 +104,8 @@ int             pipewrite(struct pipe*, char*, int);
 // proc.c
 void            exit(void);
 int             fork(unsigned int);
+void            deposit_tickets(unsigned int);
+int             withdraw_tickets(void);
 int             growproc(int);
 int             kill(int);
 void            pinit(void);

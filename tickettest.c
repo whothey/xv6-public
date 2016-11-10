@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
   printf(1, "\nYou could send me parameters in this way:\n");
   printf(1, "    %s nprocesses [p0ticket, p1ticket, p2ticket, ...]\n", argv[0]);
   printf(1, "    nprocesses: number of forks that will be created\n");
-  printf(1, "    [p0ticket, ...]: tickets that will be binded to processes, if there is not enough I'll randomize some for you.\n");
+  printf(1, "    [p0ticket, ...]: tickets that will be assigned to processes, if there is not enough I'll randomize some for you.\n");
 
   printf(1, "\nNow I'm going to start %d processes and bind your tickets for them...\n\n", nprocesses);
 

@@ -7,6 +7,8 @@
 #include "mmu.h"
 #include "proc.h"
 
+extern unsigned int nexttickets;
+
 int
 sys_fork(void)
 {
@@ -51,6 +53,25 @@ int
 sys_gettickets(void)
 {
   return proc->tickets;
+}
+
+int
+sys_deposittickets(void)
+{
+  int t;
+
+  if(argint(0, &t) < 0)
+    return -1;
+
+  deposit_tickets(t);
+
+  return 0;
+}
+
+int
+sys_withdrawtickets(void)
+{
+  return withdraw_tickets();
 }
 
 int

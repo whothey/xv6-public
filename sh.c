@@ -183,7 +183,7 @@ fork1(void)
 {
   int pid;
 
-  pid = fork(50);
+  pid = fork(withdrawtickets());
   if(pid == -1)
     panic("fork");
   return pid;

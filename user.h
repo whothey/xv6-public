@@ -21,6 +21,8 @@ int chdir(char*);
 int dup(int);
 int getpid(void);
 int gettickets(void);
+int deposittickets(unsigned int);
+int withdrawtickets(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
