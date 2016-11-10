@@ -2,11 +2,13 @@
 #include "stat.h"
 #include "syscall.h"
 #include "user.h"
+#include "rand.h"
 
-#define IS_FORKED (pid == 0)
-#define CHECK_FORK() if (pid < 0) printf(1, "Fork failed!");
+// Limit of tickets
+#define TLIMIT 500
 
-#define LIMIT 500
+// Limit of loops
+#define LIMIT  400
 
 void nop() {
   // Must do something like "print nothing" due agressive loop optimizations
@@ -14,34 +16,33 @@ void nop() {
   return;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
   int pid = 0;
-  unsigned int i, j, k;
+  unsigned int i, j, k, nprocesses, n, t;
 
-  printf(1, "I'm PID %d, the Godfather with %d tickets!\n", getpid(), gettickets());
+  if (argc > 1)
+    nprocesses = atoi(argv[1]);
+  else
+    nprocesses = 10;
 
-  pid = fork(100);
-  CHECK_FORK();
+  printf(1, "Hello! I'm PID %d, the Scheduler Tester with %d tickets!\n", getpid(), gettickets());
+  printf(1, "\nYou could send me parameters in this way:\n");
+  printf(1, "    %s nprocesses [p0ticket, p1ticket, p2ticket, ...]\n", argv[0]);
+  printf(1, "    nprocesses: number of forks that will be created\n");
+  printf(1, "    [p0ticket, ...]: tickets that will be binded to processes, if there is not enough I'll randomize some for you.\n");
 
-  if (!IS_FORKED) {
-    pid = fork(400);
-    CHECK_FORK();
-  }
+  printf(1, "\nNow I'm going to start %d processes and bind your tickets for them...\n\n", nprocesses);
 
-  if (!IS_FORKED) {
-    pid = fork(1000);
-    CHECK_FORK();
-  }
+  for (n = 0, t = 0; n < nprocesses; n++) {
+    if (t < (argc - 1))
+      pid = fork(atoi(argv[2 + t++]));
+    else
+      pid = fork(fastrand() % (TLIMIT + 100));
 
-  if (!IS_FORKED) {
-    pid = fork(0);
-    CHECK_FORK();
-  }
+    if (pid < 0) printf(1, "Fork failed!");
 
-  if (!IS_FORKED) {
-    pid = fork(40);
-    CHECK_FORK();
+    if (pid == 0) break;
   }
 
   if (pid == 0) {
@@ -51,17 +52,13 @@ int main()
       for (j = 0; j < LIMIT; j++)
         for (k = 0; k < LIMIT; k++) nop();
 
-    printf(1, "PID %d has ended!\n", getpid());
+    printf(1, "PID %d has ended! (%d)\n", getpid(), gettickets());
   }
 
   if (pid > 0) {
-    wait();
-    wait();
-    wait();
-    wait();
-    wait();
+    for (n = 0; n < nprocesses; n++) wait();
 
-    printf(1, "The Godfather(%d) says: all ok!\n", getpid());
+    printf(1, "Test finished\n", getpid());
   }
 
   exit();
