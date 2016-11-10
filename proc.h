@@ -5,6 +5,13 @@
     (proc)->tickets = MIN_TICKETS;              \
   else                                          \
     (proc)->tickets = (n);                      \
+  CALC_STRIDE(proc)
+
+#define CALC_STRIDE(proc)                       \
+  if (proc->tickets > 0)                        \
+    (proc)->stride = STRIDE / (proc)->tickets;  \
+  else                                          \
+    (proc)->stride = 0                          \
 
 // Per-CPU state
 struct cpu {
@@ -71,7 +78,11 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  unsigned int tickets;        // Number of tickets for Lottery Scheduler
+
+  // Scheduler related
+  unsigned int tickets;        // Number of tickets for Stride Scheduler
+  unsigned int stride;         // Stride value for scheduler
+  unsigned long long pass;     // Pass counting
 };
 
 // Process memory is laid out contiguously, low addresses first:

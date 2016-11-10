@@ -11,7 +11,6 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  unsigned long total_tickets;
 } ptable;
 
 static struct proc *initproc;
@@ -26,7 +25,6 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-  ptable.total_tickets = 0;
 }
 
 //PAGEBREAK: 32
@@ -70,7 +68,10 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-  p->tickets = MIN_TICKETS;
+
+  // Sched
+  SET_TICKETS(p, MIN_TICKETS);
+  p->pass    = 0;
 
   return p;
 }
@@ -91,7 +92,7 @@ userinit(void)
   // the lock isn't needed because no other
   // thread will look at an EMBRYO proc.
   release(&ptable.lock);
-  
+
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -116,9 +117,8 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
-  p->tickets = MAX_TICKETS;
-
-  ptable.total_tickets += p->tickets;
+  SET_TICKETS(p, MAX_TICKETS);
+  p->pass = 0;
 
   release(&ptable.lock);
 }
@@ -192,8 +192,7 @@ fork(unsigned int ntickets)
 
   // Tickets
   SET_TICKETS(np, ntickets);
-
-  ptable.total_tickets += np->tickets;
+  np->pass   = 0;
 
   release(&ptable.lock);
 
@@ -241,7 +240,6 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
-  ptable.total_tickets -= proc->tickets;
   sched();
   panic("zombie exit");
 }
@@ -302,8 +300,7 @@ void
 scheduler(void)
 {
   struct proc *p;
-  unsigned long twinner = 0;
-  unsigned long tacum;
+  struct proc *chosen = 0;
 
   for(;;) {
     // Enable interrupts on this processor.
@@ -312,31 +309,26 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    // Choose any of the tickets
-    if (ptable.total_tickets > 0) {
-      twinner = rand_xor128() % ptable.total_tickets;
+    for(p = ptable.proc, chosen = 0; p < &ptable.proc[NPROC]; p++)
+      if(p->state == RUNNABLE && (chosen == 0 || p->pass < chosen->pass))
+        chosen = p;
 
-      for(p = ptable.proc, tacum = 0; p < &ptable.proc[NPROC]; p++) {
-        if(p->state == RUNNABLE) {
-          tacum += p->tickets;
-
-          // We've found the winner
-          if (twinner <= tacum) break;
-        }
-      }
-
+    // If there is any valid process chosen
+    if (chosen != 0) {
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&cpu->scheduler, p->context);
+      chosen->pass += chosen->stride;
+      proc = chosen;
+      switchuvm(chosen);
+      chosen->state = RUNNING;
+      swtch(&cpu->scheduler, chosen->context);
       switchkvm();
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
-      proc = 0;
+      proc   = 0;
+      chosen = 0;
     }
 
     release(&ptable.lock);
@@ -424,7 +416,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
-  ptable.total_tickets -= proc->tickets;
   sched();
 
   // Tidy up.
@@ -448,7 +439,6 @@ wakeup1(void *chan)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
-      ptable.total_tickets += p->tickets;
     }
 }
 
@@ -473,8 +463,8 @@ kill(int pid)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
       p->killed = 1;
-      ptable.total_tickets -= p->tickets;
-      p->tickets = 0;
+      SET_TICKETS(p, 0);
+      p->pass = 0;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
@@ -506,7 +496,7 @@ procdump(void)
   char *state;
   uint pc[10];
 
-  cprintf("Total Tickets: %d\n", ptable.total_tickets);
+  cprintf("PID    State    Name    Tickets/Stride/Pass\n");
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
@@ -515,7 +505,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s (%d)", p->pid, state, p->name, p->tickets);
+    cprintf("%d    %s    %s    %d/%d/%d", p->pid, state, p->name, p->tickets, p->stride, p->pass);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
