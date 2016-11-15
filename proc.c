@@ -15,6 +15,7 @@ struct {
 
 static struct proc *initproc;
 
+struct spinlock tbank_lock;
 unsigned int ticket_bank = DEFAULT_TICKETS;
 
 int nextpid = 1;
@@ -27,12 +28,15 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  initlock(&tbank_lock, "tbank");
 }
 
 void
 deposit_tickets(unsigned int t)
 {
+  acquire(&tbank_lock);
   ticket_bank = t;
+  release(&tbank_lock);
 }
 
 int
@@ -40,7 +44,9 @@ withdraw_tickets(void)
 {
   unsigned int t = ticket_bank;
 
+  acquire(&tbank_lock);
   ticket_bank = DEFAULT_TICKETS;
+  release(&tbank_lock);
 
   return t;
 }
