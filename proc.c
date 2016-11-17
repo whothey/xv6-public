@@ -324,7 +324,7 @@ void
 scheduler(void)
 {
   struct proc *p;
-  struct proc *chosen = 0;
+  struct proc *chosen;
 
   for(;;) {
     // Enable interrupts on this processor.

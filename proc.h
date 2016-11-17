@@ -8,7 +8,7 @@
   CALC_STRIDE(proc)
 
 #define CALC_STRIDE(proc)                       \
-  if (proc->tickets > 0)                        \
+  if ((proc)->tickets > 0)                      \
     (proc)->stride = STRIDE / (proc)->tickets;  \
   else                                          \
     (proc)->stride = 0                          \
