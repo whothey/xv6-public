@@ -19,6 +19,7 @@ exec(char *path, char **argv)
   pde_t *pgdir, *oldpgdir;
 
   begin_op();
+
   if((ip = namei(path)) == 0){
     end_op();
     return -1;

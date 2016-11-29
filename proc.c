@@ -56,21 +56,26 @@ withdraw_tickets(void)
 // If found, change state to EMBRYO and initialize
 // state required to run in the kernel.
 // Otherwise return 0.
-// Must hold ptable.lock.
 static struct proc*
 allocproc(void)
 {
   struct proc *p;
   char *sp;
 
+  acquire(&ptable.lock);
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
       goto found;
+
+  release(&ptable.lock);
   return 0;
 
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+
+  release(&ptable.lock);
 
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
@@ -107,8 +112,6 @@ userinit(void)
 {
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
-
-  acquire(&ptable.lock);
 
   p = allocproc();
 
@@ -176,22 +179,16 @@ fork(unsigned int ntickets)
   int i, pid;
   struct proc *np;
 
-  acquire(&ptable.lock);
-
   // Allocate process.
   if((np = allocproc()) == 0){
-    release(&ptable.lock);
     return -1;
   }
-
-  release(&ptable.lock);
 
   // Copy process state from p.
   if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
-    release(&ptable.lock);
     return -1;
   }
   np->sz = proc->sz;
