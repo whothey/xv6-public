@@ -118,7 +118,7 @@ userinit(void)
   // release the lock in case namei() sleeps.
   // the lock isn't needed because no other
   // thread will look at an EMBRYO proc.
-  release(&ptable.lock);
+  /* release(&ptable.lock); */
 
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
