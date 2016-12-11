@@ -17,3 +17,5 @@
 #define MAX_TICKETS 500
 #define DEFAULT_TICKETS 100
 #define STRIDE      10000
+
+#define MAX_HEAP_ORDER 16

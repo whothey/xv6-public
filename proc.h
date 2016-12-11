@@ -13,6 +13,10 @@
   else                                          \
     (proc)->stride = 0                          \
 
+#ifndef NULL
+ #define NULL 0
+#endif
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -65,6 +69,15 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
+
+  // Scheduler related
+  unsigned int tickets;        // Number of tickets for Stride Scheduler
+  unsigned int stride;         // Stride value for scheduler
+  unsigned long long pass;     // Pass counting
+
+  struct proc *left, *right, *child, *heap_parent;
+  unsigned int order;
+
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
@@ -78,12 +91,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-
-  // Scheduler related
-  unsigned int tickets;        // Number of tickets for Stride Scheduler
-  unsigned int stride;         // Stride value for scheduler
-  unsigned long long pass;     // Pass counting
 };
+
+typedef struct proc proc_t;
 
 // Process memory is laid out contiguously, low addresses first:
 //   text

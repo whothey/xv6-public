@@ -7,8 +7,6 @@
 #include "mmu.h"
 #include "proc.h"
 
-extern unsigned int nexttickets;
-
 int
 sys_fork(void)
 {

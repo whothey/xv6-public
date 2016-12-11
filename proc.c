@@ -11,6 +11,7 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc *heap;
 } ptable;
 
 static struct proc *initproc;
@@ -29,6 +30,143 @@ pinit(void)
 {
   initlock(&ptable.lock, "ptable");
   initlock(&tbank_lock, "tbank");
+  ptable.heap = NULL;
+}
+
+proc_t* fibheap_insert(proc_t *head, proc_t *p)
+{
+  // Reset p position in the heap
+  p->left  = p->right = p->child = p->heap_parent = NULL;
+  p->order = 0;
+
+  // Heap is empty
+  if (head == NULL) return p;
+
+  // Put it left of min element
+  p->left        = head->left;
+  p->right       = head;
+  if (head->left != NULL) head->left->right = p;
+  head->left     = p;
+
+  // p key < head? so return p instead of head
+  return (p->pass < head->pass) ? p : head;
+}
+
+proc_t* fibheap_leftmost(proc_t *procs)
+{
+  proc_t *p = NULL;
+
+  for (p = procs; p->left != NULL; p = p->left);
+
+  return p;
+}
+
+proc_t* fibheap_rightmost(proc_t *procs)
+{
+  proc_t *p = NULL;
+
+  for (p = procs; p->right != NULL; p = p->right);
+
+  return p;
+}
+
+proc_t* fibheap_binomialize(proc_t *t1, proc_t *t2)
+{
+  proc_t *root, *child;
+
+  if (t1->order != t2->order) panic("Binomializing different-order trees!");
+
+  if (t1->pass < t2->pass) root = t1, child = t2;
+  else root = t2, child = t1;
+
+  // Unlink
+  child->left = child->right = NULL;
+
+  // If there is any child, they will be at right of the new child
+  if (root->child != NULL) {
+    child->right      = root->child;
+    root->child->left = child;
+  }
+
+  // Update relations for parent and new child
+  root->child        = child;
+  child->heap_parent = root;
+
+  root->order++;
+
+  return root;
+}
+
+proc_t* fibheap_remove_min(proc_t **heap)
+{
+  proc_t *head     = *heap;
+  proc_t *min      = head;
+  proc_t *next     = NULL;
+  proc_t *current  = NULL;
+  proc_t *orders[MAX_HEAP_ORDER];
+  unsigned int i = 0;
+
+  if (head == NULL) return NULL;
+
+  // Init orders array
+  for (i = 0; i < MAX_HEAP_ORDER; i++) orders[i] = NULL;
+
+  // Join 'min' adjacent nodes
+  if (head->left != NULL) {
+    if (head->child != NULL)
+      head->left->right = head->child;
+    else
+      head->left->right = head->right;
+  }
+
+  if (head->right != NULL) {
+    if (head->child != NULL)
+      head->right->left = fibheap_rightmost(head->child);
+    else
+      head->right->left = head->left;
+  }
+
+  if (head->left == NULL && head->right == NULL && head->child != NULL) head = head->child;
+
+  // Loop
+  for (current = fibheap_leftmost(head), next = current->right; current != NULL && next != NULL; current = next) {
+    next = current->right;
+
+    // Pop-out
+    if (current->right != NULL) {
+      current->right->left = NULL;
+      current->right       = NULL;
+    }
+
+    while(orders[current->order] != NULL) {
+      current = fibheap_binomialize(current, orders[current->order]);
+      orders[current->order - 1] = NULL;
+    }
+
+    orders[current->order] = head = current;
+  }
+
+  // Re-link nodes
+  for (i = 0, current = NULL; i < MAX_HEAP_ORDER; i++) {
+    if (orders[i] == NULL) continue;
+    if (orders[i]->pass < head->pass) head = orders[i];
+
+    next = orders[i];
+
+    if (current != NULL)
+      current->right = next;
+
+    next->left = current;
+    next->right = NULL;
+
+    current = next;
+  }
+
+  *heap = head;
+
+  if (head == min) *heap = NULL;
+
+  return min;
 }
 
 void
@@ -146,6 +284,7 @@ userinit(void)
   p->state = RUNNABLE;
   SET_TICKETS(p, MAX_TICKETS);
   p->pass = 0;
+  ptable.heap = fibheap_insert(ptable.heap, p);
 
   release(&ptable.lock);
 }
@@ -210,10 +349,11 @@ fork(unsigned int ntickets)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  ptable.heap = fibheap_insert(ptable.heap, np);
 
   // Tickets
   SET_TICKETS(np, ntickets);
-  np->pass   = 0;
+  np->pass = 0;
 
   release(&ptable.lock);
 
@@ -320,7 +460,7 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
+  /* struct proc *p; */
   struct proc *chosen;
 
   for(;;) {
@@ -330,9 +470,10 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 
-    for(p = ptable.proc, chosen = 0; p < &ptable.proc[NPROC]; p++)
-      if(p->state == RUNNABLE && (chosen == 0 || p->pass < chosen->pass))
-        chosen = p;
+    chosen = fibheap_remove_min(&ptable.heap);
+    /* for(p = ptable.proc, chosen = 0; p < &ptable.proc[NPROC]; p++) */
+    /*   if(p->state == RUNNABLE && (chosen == 0 || p->pass < chosen->pass)) */
+    /*     chosen = p; */
 
     // If there is any valid process chosen
     if (chosen != 0) {
@@ -387,6 +528,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
+  ptable.heap = fibheap_insert(ptable.heap, proc);
   sched();
   release(&ptable.lock);
 }
@@ -460,6 +602,7 @@ wakeup1(void *chan)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      ptable.heap = fibheap_insert(ptable.heap, p);
     }
 }
 
@@ -487,14 +630,34 @@ kill(int pid)
       SET_TICKETS(p, 0);
       p->pass = 0;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING) {
         p->state = RUNNABLE;
+        ptable.heap = fibheap_insert(ptable.heap, p);
+      }
       release(&ptable.lock);
       return 0;
     }
   }
   release(&ptable.lock);
   return -1;
+}
+
+void debug_heap(proc_t *heap, int depth)
+{
+  proc_t *h;
+  int i;
+
+  for (h = heap; h != NULL; h = h->right) {
+    for (i = 0; i < depth; i++) cprintf("|\t");
+    cprintf("(%p) %d -> ", h, h->pass);
+
+    if (h->child != NULL) {
+      cprintf("\n");
+      debug_heap(h->child, depth + 1);
+    }
+  }
+
+  cprintf("NULL\n");
 }
 
 //PAGEBREAK: 36
@@ -534,4 +697,8 @@ procdump(void)
     }
     cprintf("\n");
   }
+
+  cprintf("HEAP:\n");
+
+  debug_heap(ptable.heap, 0);
 }
